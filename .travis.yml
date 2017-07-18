@@ -1,0 +1,19 @@
+language: python
+
+python: "3.6"
+
+env:
+  - TOXENV=py36
+
+install:
+  - pip install .[dev]
+  - pip install -U tox
+
+script:
+  - tox
+
+matrix:
+  include:
+    - python: 3.5
+      env:
+      - TOXENV=py35

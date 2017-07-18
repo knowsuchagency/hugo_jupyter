@@ -1,0 +1,10 @@
+include LICENSE
+include README.rst
+include Pipfile
+
+graft hugo_jupyter
+graft tests
+graft docs
+
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
