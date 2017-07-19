@@ -34,10 +34,10 @@ Installation
 Usage
 -----
 
-From your hugo project's root
 
 .. code-block:: bash
 
+    cd root_of_hugo_project
     hugo_jupyter --init
 
 This will create a ``notebooks`` directory at the root of your hugo project if it doesn't yet exist.
