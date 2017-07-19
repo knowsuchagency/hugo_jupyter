@@ -21,6 +21,7 @@ Use Jupyter notebooks to publish with Hugo.
 
 
 * Documentation: https://knowsuchagency.github.io/hugo_jupyter
+* Source: https://github.com/knowsuchagency/hugo_jupyter
 
 
 Installation
@@ -40,6 +41,7 @@ From your hugo project's root
     hugo_jupyter --init
 
 This will create a ``notebooks`` directory at the root of your hugo project if it doesn't yet exist.
+Any jupyter notebooks you want rendered should go in this directory.
 
 Then, from the root of your hugo project, you can type ``fab serve`` to automatically initialize
 your jupyter server, hugo server, and watchdog to re-render your jupyter notebooks to markdown for hugo
