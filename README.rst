@@ -46,3 +46,14 @@ Any jupyter notebooks you want rendered should go in this directory.
 Then, from the root of your hugo project, you can type ``fab serve`` to automatically initialize
 your jupyter server, hugo server, and watchdog to re-render your jupyter notebooks to markdown for hugo
 as you create and edit them.
+
+Jupyter Notebooks
+-----------------
+
+Any notebooks that you create will need `front matter`_ for hugo to know how to render the content.
+
+.. image:: http://i.imgur.com/ynQs0gB.png
+
+.. image:: http://i.imgur.com/Jcjwc0y.png
+
+.. _front matter: https://gohugo.io/content-management/front-matter/
