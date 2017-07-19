@@ -1,7 +1,6 @@
 import re
 import json
 import sys
-import signal
 import subprocess as sp
 from pathlib import Path
 from typing import *
@@ -52,7 +51,15 @@ def serve(init_jupyter=True):
 
     local('open http://localhost:1313')
 
-    def interruption_handler(*args):
+    try:
+        print(Fore.GREEN + 'Successfully initialized server(s)',
+              Fore.YELLOW + 'press ctrl+C at any time to quit',
+              Fore.WHITE)
+        while True:
+            pass
+    except KeyboardInterrupt:
+        print(Fore.YELLOW + 'Terminating')
+    finally:
         if init_jupyter:
             print(Fore.YELLOW + 'shutting down jupyter')
             jupyter_process.kill()
@@ -64,15 +71,6 @@ def serve(init_jupyter=True):
         hugo_process.kill()
         print(Fore.GREEN + 'all processes shut down successfully')
         sys.exit(0)
-
-    signal.signal(signal.SIGINT, interruption_handler)
-
-    print(Fore.GREEN + 'Successfully initialized server(s)',
-          Fore.YELLOW + 'press ctrl+C at any time to quit',
-          Fore.WHITE)
-
-    while True:
-        pass
 
 
 @task
