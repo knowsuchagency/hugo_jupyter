@@ -17,7 +17,7 @@ Hugo Jupyter
 
 
 
-Use Jupyter notebooks to publish with Hugo.
+Publish Jupyter_ notebooks with Hugo_.
 
 
 * Documentation: https://knowsuchagency.github.io/hugo_jupyter
@@ -57,3 +57,5 @@ Any notebooks that you create will need `front matter`_ for hugo to know how to 
 .. image:: http://i.imgur.com/Jcjwc0y.png
 
 .. _front matter: https://gohugo.io/content-management/front-matter/
+.. _hugo: https://gohugo.io/
+.. _jupyter: http://jupyter.org/
