@@ -38,3 +38,9 @@ From your hugo project's root
 .. code-block:: bash
 
     hugo_jupyter --init
+
+This will create a ``notebooks`` directory at the root of your hugo project if it doesn't yet exist.
+
+Then, from the root of your hugo project, you can type ``fab serve`` to automatically initialize
+your jupyter server, hugo server, and watchdog to re-render your jupyter notebooks to markdown for hugo
+as you create and edit them.
