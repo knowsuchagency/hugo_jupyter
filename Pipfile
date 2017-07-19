@@ -7,7 +7,8 @@ docopt = "*"
 Fabric3 = "*"
 watchdog = "*"
 jupyter = "*"
-
+colorama = "*"
+jupyter_nbextensions_configurator = "*"
 
 [dev-packages]
 bumpversion = "==0.5.3"
