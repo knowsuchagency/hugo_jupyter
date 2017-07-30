@@ -1,6 +1,7 @@
 include LICENSE
 include README.rst
 include Pipfile
+include Pipfile.lock
 
 graft hugo_jupyter
 graft tests
