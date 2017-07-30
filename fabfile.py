@@ -1,6 +1,29 @@
+from functools import partial
 from functools import singledispatch
+from io import StringIO
 
+from utils import _verify_lockfile, get_packages_from_lockfile
+
+from fabric.tasks import Task
 from fabric.api import *
+
+from colorama import init, Back
+init(autoreset=True)
+
+
+def print_in_color(color, *args, **kwargs):
+    """Print text in a given color."""
+    file = kwargs.pop('file', None)
+    with StringIO('w+') as fp:
+        fp.write(color)
+        print(*args, file=fp, **kwargs)
+        fp.seek(0)
+        print(fp.read().strip(), file=file)
+
+
+print_red = partial(print_in_color, Back.RED)
+print_green = partial(print_in_color, Back.GREEN)
+print_yellow = partial(print_in_color, Back.YELLOW)
 
 
 @task
@@ -47,6 +70,7 @@ def test(capture=True):
         capture: capture stdout [default: True]
     """
     disable_capturing = ' -s' if not true(capture) else ''
+    verify_lockfile.run()
     local('py.test' + disable_capturing)
 
 
@@ -54,7 +78,10 @@ def test(capture=True):
 def test_all(absolute_path=None):
     """Run on multiple Python versions with tox."""
     from pathlib import Path
+
+    # This happens to be where I have Python 3.5 installed; may well be different for others. Edit as necessary.
     py35_path = Path(Path.home(), '.pyenv/versions/3.5.2/bin') if absolute_path is None else Path(absolute_path)
+
     with path(str(py35_path.absolute())):
         local('tox')
 
@@ -109,13 +136,13 @@ def publish_docs():
         if local('git show-ref refs/heads/gh-pages').failed:
             # initialized github pages branch
             local(dedent("""
-            git checkout --orphan gh-pages
-            git reset --hard
-            git commit --allow-empty -m "Initializing gh-pages branch"
-            git push origin gh-pages
-            git checkout master
-            """).strip())
-            print('created github pages branch')
+                git checkout --orphan gh-pages
+                git reset --hard
+                git commit --allow-empty -m "Initializing gh-pages branch"
+                git push gh-pages
+                git checkout master
+                """).strip())
+            print_green('created github pages branch')
 
     # deleting old publication
     local('rm -rf public')
@@ -123,7 +150,7 @@ def publish_docs():
     local('git worktree prune')
     local('rm -rf .git/worktrees/public/')
     # checkout out gh-pages branch into public
-    local('git worktree add -B gh-pages public origin/gh-pages')
+    local('git worktree add -B gh-pages public gh-pages')
     # generating docs
     docs(open_browser=False)
     # push to github
@@ -144,8 +171,8 @@ def dist():
 @task
 def release():
     """Package and upload a release to pypi."""
-    #clean()
-    #test_all()
+    clean()
+    test_all()
     publish_docs()
     local('python setup.py sdist upload')
     local('python setup.py bdist_wheel upload')
@@ -154,30 +181,38 @@ def release():
 @task
 def gen_requirements_txt(with_dev=True):
     """
-    Generate a requirements.txt from Fabfile.
+    Generate a requirements.txt from Pipfile.lock
 
     This is more for the benefit of third-party packages
     like pyup.io that need requirements.txt
     """
-    from configparser import ConfigParser
     from pathlib import Path
 
-    pip_config = ConfigParser()
-    pip_config.read('Pipfile')
-    requirements_file = Path('requirements.txt')
-    packages = []
-    items = pip_config.items('packages')
-    if true(with_dev) and pip_config.has_section('dev-packages'):
-        items.extend(pip_config.items('dev-packages'))
-    for item in items:
-        lib, version = item
-        lib, version = lib.strip('"'), version.strip('"')
-        # ungracefully handle wildcard requirements
-        if version == '*': version = ''
-        packages.append(lib + version)
+    verify_lockfile.run()
 
-    requirements_file.write_text('\n'.join(packages))
-    print('successfully generated requirements.txt')
+    packages = get_packages_from_lockfile()
+
+    requirements_file = Path('requirements.txt')
+
+    requirements_file.write_text('\n'.join(packages.default + (packages.development if true(with_dev) else [])))
+    print_green('successfully generated requirements.txt')
+
+
+class VerifyLockfile(Task):
+    name = 'verify_lockfile'
+
+    def set_docstring(func):
+        func.__doc__ = _verify_lockfile.__doc__
+        return func
+
+    @set_docstring
+    def run(self):
+        _verify_lockfile()
+        print_green('lockfile verified')
+
+
+verify_lockfile = VerifyLockfile()
+verify_lockfile.__doc__ = _verify_lockfile.__doc__
 
 
 @singledispatch
@@ -219,4 +254,3 @@ def _(arg):
     """If the lowercase string is 't' or 'true', return True else False."""
     argument = arg.lower().strip()
     return argument == 'true' or argument == 't'
-

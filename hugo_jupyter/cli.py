@@ -20,6 +20,7 @@ from pathlib import Path
 from subprocess import run
 from textwrap import dedent
 
+from pkg_resources import resource_filename
 from docopt import docopt
 
 
@@ -30,7 +31,7 @@ def main(argv=None):
         notebooks_dir = Path('./notebooks/')
         notebooks_dir.mkdir(exist_ok=True)
 
-        with open(Path(Path(__file__).parent, '__fabfile.py')) as fp:
+        with open(resource_filename('hugo_jupyter', '__fabfile.py')) as fp:
             fabfile = Path('fabfile.py')
             fabfile.write_text(fp.read())
 

@@ -8,7 +8,7 @@ Fabric3 = "*"
 watchdog = "*"
 jupyter = "*"
 colorama = "*"
-jupyter_nbextensions_configurator = "*"
+jupyter_contrib_nbextensions = "*"
 
 [dev-packages]
 bumpversion = "==0.5.3"
