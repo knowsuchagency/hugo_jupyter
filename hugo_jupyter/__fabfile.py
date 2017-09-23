@@ -1,6 +1,7 @@
 import re
 import json
 import sys
+import shlex
 import subprocess as sp
 from pathlib import Path
 from typing import *
@@ -33,18 +34,19 @@ def render_notebooks():
 
 
 @task
-def serve(init_jupyter=True):
+def serve(hugo_args='', init_jupyter=True):
     """
     Watch for changes in jupyter notebooks and render them anew while hugo runs.
 
     Args:
         init_jupyter: initialize jupyter if set to True
+        hugo_args: command-line arguments to be passed to `hugo server`
     """
     observer = Observer()
     observer.schedule(NotebookHandler(), 'notebooks')
     observer.start()
 
-    hugo_process = sp.Popen(('hugo', 'serve'))
+    hugo_process = sp.Popen(('hugo', 'serve', *shlex.split(hugo_args)))
 
     if init_jupyter:
         jupyter_process = sp.Popen(('jupyter', 'notebook'), cwd='notebooks')
