@@ -5,13 +5,13 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>Welcome to Hugo Jupyter’s documentation! &#8212; Hugo Jupyter 0.3.0 documentation</title>
+    <title>Welcome to Hugo Jupyter’s documentation! &#8212; Hugo Jupyter 1.0.0 documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '0.3.0',
+        VERSION:     '1.0.0',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true,
@@ -64,14 +64,23 @@ hugo_jupyter --init
 </pre></div>
 </div>
 <p>This will create a <code class="docutils literal"><span class="pre">notebooks</span></code> directory at the root of your hugo project if it doesn’t yet exist.
-Any jupyter notebooks you want rendered should go in this directory.</p>
-<p>Then, from the root of your hugo project, you can type <code class="docutils literal"><span class="pre">fab</span> <span class="pre">serve</span></code> to automatically initialize
-your jupyter server, hugo server, and watchdog to re-render your jupyter notebooks to markdown for hugo
-as you create and edit them.</p>
+Any jupyter notebooks you want rendered should go in the <code class="docutils literal"><span class="pre">notebooks</span></code> directory.</p>
+<p>In addition, a fabfile.py script will be written at the project root.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>fab serve
+</pre></div>
+</div>
+<p>Automatically initializes your jupyter server, hugo server, and watchdog to re-render
+your jupyter notebooks to markdown for hugo as you create and edit them.</p>
 </div>
 <div class="section" id="jupyter-notebooks">
 <h3>Jupyter Notebooks<a class="headerlink" href="#jupyter-notebooks" title="Permalink to this headline">¶</a></h3>
 <p>Any notebooks that you create will need <a class="reference external" href="https://gohugo.io/content-management/front-matter/">front matter</a> for hugo to know how to render the content.</p>
+<p>Once you edit the name of the jupyter notebook to something other than <code class="docutils literal"><span class="pre">Untitled*.ipynb</span></code>, hugo-jupyter will
+automatically edit the notebook’s metadata to enable rendering with jupyter. You may need to reload the
+notebook page to see the changes in the metadata.</p>
+<p>There will also be a <code class="docutils literal"><span class="pre">hugo-jupyter</span></code> dictionary in the notebook’s metadata with a <code class="docutils literal"><span class="pre">render-to</span></code> field
+automatically set to <code class="docutils literal"><span class="pre">content/post/</span></code>. You can edit this field to edit where the notebook’s markdown
+will be rendered to.</p>
 <img alt="http://i.imgur.com/ynQs0gB.png" src="http://i.imgur.com/ynQs0gB.png" />
 <img alt="http://i.imgur.com/Jcjwc0y.png" src="http://i.imgur.com/Jcjwc0y.png" />
 </div>
