@@ -5,6 +5,8 @@ import shlex
 import subprocess as sp
 from pathlib import Path
 from datetime import datetime
+from collections import defaultdict
+from pprint import pprint
 from typing import *
 
 import nbformat
@@ -18,7 +20,6 @@ from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
 import crayons
-
 
 from fabric.api import *
 
@@ -182,28 +183,35 @@ def notebook_to_markdown(path: Union[Path, str]) -> str:
     return output
 
 
-def write_hugo_formatted_nb_to_md(notebook: Union[Path, str]):
+def write_hugo_formatted_nb_to_md(notebook: Union[Path, str], render_to: Optional[Union[Path, str]] = None) -> Path:
     """
     Convert Jupyter notebook to markdown and write it to the appropriate file.
 
     Args:
         notebook: The path to the notebook to be rendered
+        render_to: The directory we want to render the notebook to
     """
     notebook = Path(notebook)
     rendered_markdown_string = notebook_to_markdown(notebook)
     slug = json.loads(notebook.read_text())['metadata']['front-matter']['slug']
-    rendered_markdown_file = Path('content/post/', slug + '.md')
+    render_to = render_to or 'content/post/'
+    if not render_to.endswith('/'): render_to += '/'
+    rendered_markdown_file = Path(render_to, slug + '.md')
+    if not rendered_markdown_file.parent.exists():
+        rendered_markdown_file.parent.mkdir(parents=True)
     rendered_markdown_file.write_text(rendered_markdown_string)
     print(notebook.name, '->', rendered_markdown_file.name)
+    return rendered_markdown_file
 
 
-def update_notebook_front_matter(notebook: Union[Path, str],
-                                 title: Union[None, str]=None,
-                                 subtitle: Union[None, str]=None,
-                                 date: Union[None, str]=None,
-                                 slug: Union[None, str]=None):
+def update_notebook_metadata(notebook: Union[Path, str],
+                             title: Union[None, str] = None,
+                             subtitle: Union[None, str] = None,
+                             date: Union[None, str] = None,
+                             slug: Union[None, str] = None,
+                             render_to: str = None):
     """
-    Update the notebook's front-matter
+    Update the notebook's metadata for hugo rendering
 
     Args:
         notebook: notebook to have edited
@@ -225,13 +233,21 @@ def update_notebook_front_matter(notebook: Union[Path, str],
         'slug': slug,
     }
 
+    # update front-matter
     notebook_data['metadata']['front-matter'] = front_matter
+
+    # update hugo-jupyter settings
+    render_to = render_to or notebook_data['metadata'].get('hugo-jupyter', {}).get('render-to') or 'content/post/'
+    hugo_jupyter = {
+        'render-to': render_to
+    }
+    notebook_data['metadata']['hugo-jupyter'] = hugo_jupyter
 
     # write over old notebook with new front-matter
     notebook_path.write_text(json.dumps(notebook_data))
 
-
-
+    # make the notebook trusted again, now that we've changed it
+    sp.run(['jupyter', 'trust', str(notebook_path)])
 
 
 ########## Watchdog stuff #################
@@ -239,15 +255,27 @@ def update_notebook_front_matter(notebook: Union[Path, str],
 class NotebookHandler(PatternMatchingEventHandler):
     patterns = ["*.ipynb"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+        # a mapping of notebook filepaths and their respective metadata
+        self.notebook_metadata: Mapping[str, dict] = {}
+        # a mapping of notebook filepaths and where they were rendered to
+        self.notebook_render: Mapping[str, List[Path]] = defaultdict(list)
+
     def process(self, event):
+        # update filename_slug dictionary
+        self.update_notebook_metadata_registry(event)
+
         try:
             # don't automatically update front matter
             # and render notebook until filename is
             # changed from untitled...
-            if 'untitled' not in event.src_path.lower():
+            if 'untitled' not in event.src_path.lower() and not event.src_path.startswith('.'):
                 self.delete_notebook_md(event)
-                update_notebook_front_matter(event.src_path)
-                write_hugo_formatted_nb_to_md(event.src_path)
+                update_notebook_metadata(event.src_path)
+                render_to = self.get_render_to_field(event)
+                rendered = write_hugo_formatted_nb_to_md(event.src_path, render_to=render_to)
+                self.notebook_render[event.src_path].append(rendered)
         except Exception as e:
             print('could not successfully render', event.src_path)
             print(e)
@@ -262,17 +290,23 @@ class NotebookHandler(PatternMatchingEventHandler):
         self.delete_notebook_md(event)
 
     def delete_notebook_md(self, event):
-        possible_rendered_markdown_paths = self.get_possible_rendered_md_paths(event)
-        for path in possible_rendered_markdown_paths:
+        print(crayons.yellow("attempting to delete the post for {}".format(event.src_path)))
+        for path in self.notebook_render[event.src_path]:
             if path.exists():
                 path.unlink()
                 print(crayons.yellow('removed post: {}'.format(path)))
 
-    def get_possible_rendered_md_paths(self, event):
-        source_path = Path(event.src_path)
-        slug = json.loads(source_path.read_text())['metadata']['front-matter']['slug']
-        return [
-            Path('content/post/' + slug + '.md'),
-            Path('content/post/' + source_path.stem + '.md'),
-            ]
+    def update_notebook_metadata_registry(self, event):
+        try:
+            self.notebook_metadata[event.src_path] = json.loads(
+                Path(event.src_path).read_text())['metadata']
+        except json.JSONDecodeError:
+            print(crayons.yellow("Could not decode as json file: {}".format(event.src_path)))
 
+    def get_render_to_field(self, event) -> Optional[Path]:
+        try:
+            return self.notebook_metadata[event.src_path].get('hugo-jupyter', {}).get('render-to')
+        except json.JSONDecodeError:
+            print(crayons.yellow("could not marshal notebook to json: {}".format(event.src_path)))
+        except KeyError:
+            print("{} has no field hugo-jupyter.render-to in its metadata".format(event.src_path))
