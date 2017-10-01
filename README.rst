@@ -34,6 +34,8 @@ Installation
 Usage
 -----
 
+.. image:: example_movie.gif
+    :target: https://youtu.be/LtdyM4hP85I
 
 .. code-block:: bash
 
@@ -52,8 +54,6 @@ In addition, a fabfile.py script will be written at the project root.
 Automatically initializes your jupyter server, hugo server, and watchdog to re-render
 your jupyter notebooks to markdown for hugo as you create and edit them.
 
-.. image:: example_movie.gif
-    :target: https://youtu.be/LtdyM4hP85I
 
 Jupyter Notebooks
 -----------------
