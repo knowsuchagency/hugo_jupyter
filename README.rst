@@ -41,16 +41,29 @@ Usage
     hugo_jupyter --init
 
 This will create a ``notebooks`` directory at the root of your hugo project if it doesn't yet exist.
-Any jupyter notebooks you want rendered should go in this directory.
+Any jupyter notebooks you want rendered should go in the ``notebooks`` directory.
 
-Then, from the root of your hugo project, you can type ``fab serve`` to automatically initialize
-your jupyter server, hugo server, and watchdog to re-render your jupyter notebooks to markdown for hugo
-as you create and edit them.
+In addition, a fabfile.py script will be written at the project root.
+
+.. code-block:: bash
+
+    fab serve
+
+Automatically initializes your jupyter server, hugo server, and watchdog to re-render
+your jupyter notebooks to markdown for hugo as you create and edit them.
 
 Jupyter Notebooks
 -----------------
 
 Any notebooks that you create will need `front matter`_ for hugo to know how to render the content.
+
+Once you edit the name of the jupyter notebook to something other than ``Untitled*.ipynb``, hugo-jupyter will
+automatically edit the notebook's metadata to enable rendering with jupyter. You may need to reload the
+notebook page to see the changes in the metadata.
+
+There will also be a ``hugo-jupyter`` dictionary in the notebook's metadata with a ``render-to`` field
+automatically set to ``content/post/``. You can edit this field to edit where the notebook's markdown
+will be rendered to.
 
 .. image:: http://i.imgur.com/ynQs0gB.png
 
