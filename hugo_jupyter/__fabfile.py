@@ -6,7 +6,6 @@ import subprocess as sp
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
-from pprint import pprint
 from typing import *
 
 import nbformat
