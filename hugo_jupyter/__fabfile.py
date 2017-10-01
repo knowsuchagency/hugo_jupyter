@@ -4,6 +4,7 @@ import sys
 import shlex
 import subprocess as sp
 from pathlib import Path
+from datetime import datetime
 from typing import *
 
 import nbformat
@@ -16,9 +17,8 @@ from traitlets.config import Config
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
-from colorama import Fore, init
+import crayons
 
-init()
 
 from fabric.api import *
 
@@ -30,7 +30,7 @@ def render_notebooks():
     """
     notebooks = Path('notebooks').glob('*.ipynb')
     for notebook in notebooks:
-        write_jupyter_to_md(notebook)
+        write_hugo_formatted_nb_to_md(notebook)
 
 
 @task
@@ -54,24 +54,24 @@ def serve(hugo_args='', init_jupyter=True):
     local('open http://localhost:1313')
 
     try:
-        print(Fore.GREEN + 'Successfully initialized server(s)',
-              Fore.YELLOW + 'press ctrl+C at any time to quit',
-              Fore.WHITE)
+        print(crayons.green('Successfully initialized server(s)'),
+              crayons.yellow('press ctrl+C at any time to quit'),
+              )
         while True:
             pass
     except KeyboardInterrupt:
-        print(Fore.YELLOW + 'Terminating')
+        print(crayons.yellow('Terminating'))
     finally:
         if init_jupyter:
-            print(Fore.YELLOW + 'shutting down jupyter')
+            print(crayons.yellow('shutting down jupyter'))
             jupyter_process.kill()
 
-        print(Fore.YELLOW + 'shutting down watchdog')
+        print(crayons.yellow('shutting down watchdog'))
         observer.stop()
         observer.join()
-        print(Fore.YELLOW + 'shutting down hugo')
+        print(crayons.yellow('shutting down hugo'))
         hugo_process.kill()
-        print(Fore.GREEN + 'all processes shut down successfully')
+        print(crayons.green('all processes shut down successfully'))
         sys.exit(0)
 
 
@@ -154,7 +154,16 @@ def doctor(string: str) -> str:
     return inter_output_filtered
 
 
-def convert_notebook_to_hugo_markdown(path: Union[Path, str]) -> str:
+def notebook_to_markdown(path: Union[Path, str]) -> str:
+    """
+    Convert jupyter notebook to hugo-formatted markdown string
+
+    Args:
+        path: path to notebook
+
+    Returns: hugo-formatted markdown
+
+    """
     with open(Path(path)) as fp:
         notebook = nbformat.read(fp, as_version=4)
         assert 'front-matter' in notebook['metadata'], "You must have a front-matter field in the notebook's metadata"
@@ -173,17 +182,56 @@ def convert_notebook_to_hugo_markdown(path: Union[Path, str]) -> str:
     return output
 
 
-def write_jupyter_to_md(notebook):
+def write_hugo_formatted_nb_to_md(notebook: Union[Path, str]):
+    """
+    Convert Jupyter notebook to markdown and write it to the appropriate file.
+
+    Args:
+        notebook: The path to the notebook to be rendered
+    """
     notebook = Path(notebook)
-    hugo_markdown = convert_notebook_to_hugo_markdown(notebook)
-    front_matter = json.loads(notebook.read_text())['metadata']['front-matter']
-    if 'slug' in front_matter:
-        slug = front_matter['slug']
-    else:
-        slug = '-'.join(e for e in front_matter['title'].lower().split())
-    hugo_file = Path('content/post/', slug + '.md')
-    hugo_file.write_text(hugo_markdown)
-    print(notebook.name, '->', hugo_file.name)
+    rendered_markdown_string = notebook_to_markdown(notebook)
+    slug = json.loads(notebook.read_text())['metadata']['front-matter']['slug']
+    rendered_markdown_file = Path('content/post/', slug + '.md')
+    rendered_markdown_file.write_text(rendered_markdown_string)
+    print(notebook.name, '->', rendered_markdown_file.name)
+
+
+def update_notebook_front_matter(notebook: Union[Path, str],
+                                 title: Union[None, str]=None,
+                                 subtitle: Union[None, str]=None,
+                                 date: Union[None, str]=None,
+                                 slug: Union[None, str]=None):
+    """
+    Update the notebook's front-matter
+
+    Args:
+        notebook: notebook to have edited
+    """
+    notebook_path: Path = Path(notebook)
+    notebook_data: dict = json.loads(notebook_path.read_text())
+    old_front_matter: dict = notebook_data.get('metadata', {}).get('front-matter', {})
+
+    # generate front-matter fields
+    title = title or old_front_matter.get('title') or notebook_path.stem
+    subtitle = subtitle or old_front_matter.get('subtitle') or 'Generic subtitle'
+    date = date or old_front_matter.get('date') or datetime.now().strftime('%Y-%m-%d')
+    slug = slug or old_front_matter.get('slug') or title.lower().replace(' ', '-')
+
+    front_matter = {
+        'title': title,
+        'subtitle': subtitle,
+        'date': date,
+        'slug': slug,
+    }
+
+    notebook_data['metadata']['front-matter'] = front_matter
+
+    # write over old notebook with new front-matter
+    notebook_path.write_text(json.dumps(notebook_data))
+
+
+
 
 
 ########## Watchdog stuff #################
@@ -193,7 +241,13 @@ class NotebookHandler(PatternMatchingEventHandler):
 
     def process(self, event):
         try:
-            write_jupyter_to_md(event.src_path)
+            # don't automatically update front matter
+            # and render notebook until filename is
+            # changed from untitled...
+            if 'untitled' not in event.src_path.lower():
+                self.delete_notebook_md(event)
+                update_notebook_front_matter(event.src_path)
+                write_hugo_formatted_nb_to_md(event.src_path)
         except Exception as e:
             print('could not successfully render', event.src_path)
             print(e)
@@ -203,3 +257,22 @@ class NotebookHandler(PatternMatchingEventHandler):
 
     def on_created(self, event):
         self.process(event)
+
+    def on_deleted(self, event):
+        self.delete_notebook_md(event)
+
+    def delete_notebook_md(self, event):
+        possible_rendered_markdown_paths = self.get_possible_rendered_md_paths(event)
+        for path in possible_rendered_markdown_paths:
+            if path.exists():
+                path.unlink()
+                print(crayons.yellow('removed post: {}'.format(path)))
+
+    def get_possible_rendered_md_paths(self, event):
+        source_path = Path(event.src_path)
+        slug = json.loads(source_path.read_text())['metadata']['front-matter']['slug']
+        return [
+            Path('content/post/' + slug + '.md'),
+            Path('content/post/' + source_path.stem + '.md'),
+            ]
+
