@@ -30,7 +30,9 @@ def render_notebooks():
     """
     notebooks = Path('notebooks').glob('*.ipynb')
     for notebook in notebooks:
-        write_hugo_formatted_nb_to_md(notebook)
+        if (not str(notebook).startswith('.')) and ('untitled' not in str(notebook).lower()):
+            update_notebook_metadata(notebook)
+            write_hugo_formatted_nb_to_md(notebook)
 
 
 @task
@@ -191,13 +193,19 @@ def write_hugo_formatted_nb_to_md(notebook: Union[Path, str], render_to: Optiona
         render_to: The directory we want to render the notebook to
     """
     notebook = Path(notebook)
+    notebook_metadata = json.loads(notebook.read_text())['metadata']
     rendered_markdown_string = notebook_to_markdown(notebook)
-    slug = json.loads(notebook.read_text())['metadata']['front-matter']['slug']
-    render_to = render_to or 'content/post/'
-    if not render_to.endswith('/'): render_to += '/'
+    slug = notebook_metadata['front-matter']['slug']
+    render_to = render_to or notebook_metadata['hugo-jupyter']['render-to'] or 'content/post/'
+
+    if not render_to.endswith('/'):
+        render_to += '/'
+
     rendered_markdown_file = Path(render_to, slug + '.md')
+
     if not rendered_markdown_file.parent.exists():
         rendered_markdown_file.parent.mkdir(parents=True)
+
     rendered_markdown_file.write_text(rendered_markdown_string)
     print(notebook.name, '->', rendered_markdown_file.name)
     return rendered_markdown_file
