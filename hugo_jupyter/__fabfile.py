@@ -22,17 +22,21 @@ import crayons
 
 from fabric.api import *
 
+@task
+def update_notebooks_metadata():
+    """Update all the notebooks' metadata fields."""
+    notebooks = Path('notebooks').glob('*.ipynb')
+    for notebook in notebooks:
+        if (not str(notebook).startswith('.')) and ('untitled' not in str(notebook).lower()):
+            yield update_notebook_metadata(notebook)
 
 @task
 def render_notebooks():
     """
     Render jupyter notebooks it notebooks directory to respective markdown in content/post directory.
     """
-    notebooks = Path('notebooks').glob('*.ipynb')
-    for notebook in notebooks:
-        if (not str(notebook).startswith('.')) and ('untitled' not in str(notebook).lower()):
-            update_notebook_metadata(notebook)
-            write_hugo_formatted_nb_to_md(notebook)
+    for notebook in update_notebooks_metadata():
+        write_hugo_formatted_nb_to_md(notebook)
 
 
 @task
@@ -166,6 +170,9 @@ def notebook_to_markdown(path: Union[Path, str]) -> str:
     Returns: hugo-formatted markdown
 
     """
+    # first, update the notebook's metadata
+    update_notebook_metadata(path)
+
     with open(Path(path)) as fp:
         notebook = nbformat.read(fp, as_version=4)
         assert 'front-matter' in notebook['metadata'], "You must have a front-matter field in the notebook's metadata"
@@ -216,7 +223,7 @@ def update_notebook_metadata(notebook: Union[Path, str],
                              subtitle: Union[None, str] = None,
                              date: Union[None, str] = None,
                              slug: Union[None, str] = None,
-                             render_to: str = None):
+                             render_to: str = None) -> Path:
     """
     Update the notebook's metadata for hugo rendering
 
@@ -256,6 +263,8 @@ def update_notebook_metadata(notebook: Union[Path, str],
     # make the notebook trusted again, now that we've changed it
     sp.run(['jupyter', 'trust', str(notebook_path)])
 
+    return notebook_path
+
 
 ########## Watchdog stuff #################
 
@@ -267,30 +276,40 @@ class NotebookHandler(PatternMatchingEventHandler):
         # a mapping of notebook filepaths and their respective metadata
         self.notebook_metadata: Mapping[str, dict] = {}
         # a mapping of notebook filepaths and where they were rendered to
-        self.notebook_render: Mapping[str, List[Path]] = defaultdict(list)
+        self.notebook_render: Mapping[str, Set[Path]] = defaultdict(set)
 
     def process(self, event):
-        # update filename_slug dictionary
-        self.update_notebook_metadata_registry(event)
-
         try:
             # don't automatically update front matter
             # and render notebook until filename is
             # changed from untitled...
-            if 'untitled' not in event.src_path.lower() and not event.src_path.startswith('.'):
+            if 'untitled' not in event.src_path.lower() and '.~' not in event.src_path:
                 self.delete_notebook_md(event)
-                update_notebook_metadata(event.src_path)
+
+                # if not self.notebook_metadata.get(event.src_path):
+                #     self.update_notebook_metadata_registry(event.src_path)
+
+
+                # update metadata registry
+                self.update_notebook_metadata_registry(event)
+
                 render_to = self.get_render_to_field(event)
+
                 rendered = write_hugo_formatted_nb_to_md(event.src_path, render_to=render_to)
-                self.notebook_render[event.src_path].append(rendered)
+
+                self.notebook_render[event.src_path].add(rendered)
+
         except Exception as e:
             print('could not successfully render', event.src_path)
             print(e)
+
 
     def on_modified(self, event):
         self.process(event)
 
     def on_created(self, event):
+        # update notebook metadata as appropriate
+        update_notebook_metadata(event.src_path)
         self.process(event)
 
     def on_deleted(self, event):
