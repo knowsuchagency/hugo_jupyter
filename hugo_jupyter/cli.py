@@ -1,4 +1,4 @@
-"""hugo_jupyter v1.0.2
+"""hugo_jupyter v1.0.3
 
 Use Jupyter notebooks to publish with Hugo.
 
@@ -25,7 +25,7 @@ from docopt import docopt
 
 
 def main(argv=None):
-    args = docopt(__doc__, argv=argv, version='1.0.2')
+    args = docopt(__doc__, argv=argv, version='1.0.3')
     assert 'config.toml' in (p.name for p in Path().iterdir()), "config.toml not found in directory. Are you sure you're in the project's root?"
     if args['--init']:
         notebooks_dir = Path('./notebooks/')
