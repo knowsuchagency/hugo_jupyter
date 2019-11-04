@@ -16,7 +16,7 @@ crayons = "*"
 
 bumpversion = "==0.5.3"
 coverage = "==4.4.1"
-cryptography = "==1.9"
+cryptography = "==2.3"
 "flake8" = "==3.3.0"
 pytest = "*"
 "pytest-runner" = "==2.11.1"
