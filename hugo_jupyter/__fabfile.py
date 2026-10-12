@@ -1,8 +1,10 @@
 import re
+import copy
 import json
 import sys
 import shlex
 import subprocess as sp
+import time
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
@@ -27,7 +29,7 @@ def update_notebooks_metadata():
     """Update all the notebooks' metadata fields."""
     notebooks = Path('notebooks').glob('*.ipynb')
     for notebook in notebooks:
-        if (not str(notebook).startswith('.')) and ('untitled' not in str(notebook).lower()):
+        if not is_ignored_notebook(notebook):
             yield update_notebook_metadata(notebook)
 
 @task
@@ -64,7 +66,7 @@ def serve(hugo_args='', init_jupyter=True):
               crayons.yellow('press ctrl+C at any time to quit'),
               )
         while True:
-            pass
+            time.sleep(1)
     except KeyboardInterrupt:
         print(crayons.yellow('Terminating'))
     finally:
@@ -147,6 +149,20 @@ class CustomPreprocessor(Preprocessor):
             cell.source = cell.source.strip()
 
         return cell, resources
+
+
+def is_ignored_notebook(path: Union[Path, str]) -> bool:
+    """
+    Return True for notebooks that should not be rendered.
+
+    That covers hidden files such as the ``.~name.ipynb`` temporary copies
+    jupyter writes while saving, checkpoints, and notebooks still called
+    ``Untitled*.ipynb``.
+    """
+    path = Path(path)
+    return (path.name.startswith('.')
+            or '.ipynb_checkpoints' in path.parts
+            or 'untitled' in path.name.lower())
 
 
 def doctor(string: str) -> str:
@@ -232,7 +248,9 @@ def update_notebook_metadata(notebook: Union[Path, str],
     """
     notebook_path: Path = Path(notebook)
     notebook_data: dict = json.loads(notebook_path.read_text())
-    old_front_matter: dict = notebook_data.get('metadata', {}).get('front-matter', {})
+    notebook_data.setdefault('metadata', {})
+    old_metadata: dict = copy.deepcopy(notebook_data['metadata'])
+    old_front_matter: dict = notebook_data['metadata'].get('front-matter', {})
 
     # generate front-matter fields
     title = title or old_front_matter.get('title') or notebook_path.stem
@@ -257,6 +275,11 @@ def update_notebook_metadata(notebook: Union[Path, str],
     }
     notebook_data['metadata']['hugo-jupyter'] = hugo_jupyter
 
+    # leave the file alone when nothing changed; rewriting it would fire
+    # another watchdog "modified" event and render the notebook again forever
+    if notebook_data['metadata'] == old_metadata:
+        return notebook_path
+
     # write over old notebook with new front-matter
     notebook_path.write_text(json.dumps(notebook_data))
 
@@ -272,67 +295,65 @@ class NotebookHandler(PatternMatchingEventHandler):
     patterns = ["*.ipynb"]
 
     def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+        kwargs.setdefault('patterns', self.patterns)
+        kwargs.setdefault('ignore_directories', True)
+        super().__init__(*args, **kwargs)
         # a mapping of notebook filepaths and their respective metadata
         self.notebook_metadata: Mapping[str, dict] = {}
         # a mapping of notebook filepaths and where they were rendered to
         self.notebook_render: Mapping[str, Set[Path]] = defaultdict(set)
 
-    def process(self, event):
+    def process(self, src_path: str):
+        # don't automatically update front matter and render the notebook
+        # until it has been renamed from untitled, and skip the temporary
+        # .~ copies jupyter writes while saving
+        if is_ignored_notebook(src_path):
+            return
         try:
-            # don't automatically update front matter
-            # and render notebook until filename is
-            # changed from untitled...
-            if 'untitled' not in event.src_path.lower() and '.~' not in event.src_path:
-                self.delete_notebook_md(event)
+            self.delete_notebook_md(src_path)
 
-                # if not self.notebook_metadata.get(event.src_path):
-                #     self.update_notebook_metadata_registry(event.src_path)
+            # update metadata registry
+            self.update_notebook_metadata_registry(src_path)
 
+            render_to = self.get_render_to_field(src_path)
 
-                # update metadata registry
-                self.update_notebook_metadata_registry(event)
+            rendered = write_hugo_formatted_nb_to_md(src_path, render_to=render_to)
 
-                render_to = self.get_render_to_field(event)
-
-                rendered = write_hugo_formatted_nb_to_md(event.src_path, render_to=render_to)
-
-                self.notebook_render[event.src_path].add(rendered)
+            self.notebook_render[src_path].add(rendered)
 
         except Exception as e:
-            print('could not successfully render', event.src_path)
+            print('could not successfully render', src_path)
             print(e)
 
-
     def on_modified(self, event):
-        self.process(event)
+        self.process(event.src_path)
 
     def on_created(self, event):
-        # update notebook metadata as appropriate
-        update_notebook_metadata(event.src_path)
-        self.process(event)
+        self.process(event.src_path)
+
+    def on_moved(self, event):
+        # renaming Untitled.ipynb to something else shows up as a move
+        self.delete_notebook_md(event.src_path)
+        self.process(event.dest_path)
 
     def on_deleted(self, event):
-        self.delete_notebook_md(event)
+        self.delete_notebook_md(event.src_path)
 
-    def delete_notebook_md(self, event):
-        print(crayons.yellow("attempting to delete the post for {}".format(event.src_path)))
-        for path in self.notebook_render[event.src_path]:
+    def delete_notebook_md(self, src_path: str):
+        for path in self.notebook_render.pop(src_path, ()):
             if path.exists():
                 path.unlink()
                 print(crayons.yellow('removed post: {}'.format(path)))
 
-    def update_notebook_metadata_registry(self, event):
+    def update_notebook_metadata_registry(self, src_path: str):
         try:
-            self.notebook_metadata[event.src_path] = json.loads(
-                Path(event.src_path).read_text())['metadata']
+            self.notebook_metadata[src_path] = json.loads(
+                Path(src_path).read_text())['metadata']
         except json.JSONDecodeError:
-            print(crayons.yellow("Could not decode as json file: {}".format(event.src_path)))
+            print(crayons.yellow("Could not decode as json file: {}".format(src_path)))
 
-    def get_render_to_field(self, event) -> Optional[Path]:
+    def get_render_to_field(self, src_path: str) -> Optional[str]:
         try:
-            return self.notebook_metadata[event.src_path].get('hugo-jupyter', {}).get('render-to')
-        except json.JSONDecodeError:
-            print(crayons.yellow("could not marshal notebook to json: {}".format(event.src_path)))
+            return self.notebook_metadata[src_path].get('hugo-jupyter', {}).get('render-to')
         except KeyError:
-            print("{} has no field hugo-jupyter.render-to in its metadata".format(event.src_path))
+            print("{} has no field hugo-jupyter.render-to in its metadata".format(src_path))
