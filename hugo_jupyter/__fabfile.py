@@ -137,11 +137,10 @@ class CustomPreprocessor(Preprocessor):
         """
         Remove blank cells
         """
+        nb.cells = [cell for cell in nb.cells
+                    if not (cell.cell_type == 'code' and not cell.source.strip())]
         for index, cell in enumerate(nb.cells):
-            if cell.cell_type == 'code' and not cell.source:
-                nb.cells.pop(index)
-            else:
-                nb.cells[index], resources = self.preprocess_cell(cell, resources, index)
+            nb.cells[index], resources = self.preprocess_cell(cell, resources, index)
         return nb, resources
 
     def preprocess_cell(self, cell, resources, cell_index):
@@ -179,14 +178,18 @@ def doctor(string: str) -> str:
     return inter_output_filtered
 
 
-def notebook_to_markdown(path: Union[Path, str]) -> str:
+def notebook_to_markdown(path: Union[Path, str],
+                         output_files_dir: Optional[str] = None) -> Tuple[str, Dict[str, bytes]]:
     """
     Convert jupyter notebook to hugo-formatted markdown string
 
     Args:
         path: path to notebook
+        output_files_dir: URL path the markdown should use for images and
+            other cell outputs, e.g. ``/notebooks/my-post``
 
-    Returns: hugo-formatted markdown
+    Returns: hugo-formatted markdown, and a mapping of output file names
+        (prefixed with output_files_dir) to their contents
 
     """
     # first, update the notebook's metadata
@@ -202,37 +205,44 @@ def notebook_to_markdown(path: Union[Path, str]) -> str:
     c.MarkdownExporter.preprocessors = [CustomPreprocessor]
     markdown_exporter = MarkdownExporter(config=c)
 
-    markdown, _ = markdown_exporter.from_notebook_node(notebook)
+    resources = {'output_files_dir': output_files_dir} if output_files_dir else {}
+    markdown, resources = markdown_exporter.from_notebook_node(notebook, resources=resources)
     doctored_md = doctor(markdown)
     # added <!--more--> comment to prevent summary creation
     output = '\n'.join(('---', front_matter, '---', '<!--more-->', doctored_md))
 
-    return output
+    return output, resources.get('outputs', {})
 
 
 def write_hugo_formatted_nb_to_md(notebook: Union[Path, str], render_to: Optional[Union[Path, str]] = None) -> Path:
     """
     Convert Jupyter notebook to markdown and write it to the appropriate file.
 
+    Images and other cell outputs are written to ``static/notebooks/<slug>/``,
+    which hugo serves at ``/notebooks/<slug>/``.
+
     Args:
         notebook: The path to the notebook to be rendered
         render_to: The directory we want to render the notebook to
     """
     notebook = Path(notebook)
+    update_notebook_metadata(notebook)
     notebook_metadata = json.loads(notebook.read_text())['metadata']
-    rendered_markdown_string = notebook_to_markdown(notebook)
     slug = notebook_metadata['front-matter']['slug']
     render_to = render_to or notebook_metadata['hugo-jupyter']['render-to'] or 'content/post/'
 
-    if not render_to.endswith('/'):
-        render_to += '/'
+    rendered_markdown_string, outputs = notebook_to_markdown(
+        notebook, output_files_dir='/notebooks/{}'.format(slug))
 
     rendered_markdown_file = Path(render_to, slug + '.md')
-
-    if not rendered_markdown_file.parent.exists():
-        rendered_markdown_file.parent.mkdir(parents=True)
-
+    rendered_markdown_file.parent.mkdir(parents=True, exist_ok=True)
     rendered_markdown_file.write_text(rendered_markdown_string)
+
+    for filename, data in outputs.items():
+        output_file = Path('static', filename.lstrip('/\\'))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(data)
+
     print(notebook.name, '->', rendered_markdown_file.name)
     return rendered_markdown_file
 
@@ -261,12 +271,14 @@ def update_notebook_metadata(notebook: Union[Path, str],
     date = date or old_front_matter.get('date') or datetime.now().strftime('%Y-%m-%d')
     slug = slug or old_front_matter.get('slug') or title.lower().replace(' ', '-')
 
-    front_matter = {
+    # keep any other fields (author, tags, thumbnail, ...) the user added
+    front_matter = dict(old_front_matter)
+    front_matter.update({
         'title': title,
         'subtitle': subtitle,
         'date': date,
         'slug': slug,
-    }
+    })
 
     # update front-matter
     notebook_data['metadata']['front-matter'] = front_matter

@@ -61,6 +61,23 @@ There will also be a ``hugo-jupyter`` dictionary in the notebook's metadata with
 automatically set to ``content/post/``. You can edit this field to edit where the notebook's markdown
 will be rendered to.
 
+Any other fields you add to ``front-matter`` (``author``, ``tags``, ``thumbnail``, ...) are passed through to the
+rendered post.
+
+Plots and other image outputs are written to ``static/notebooks/<slug>/`` and linked from the post as
+``/notebooks/<slug>/...``.
+
+Hugo's default markdown renderer drops raw HTML, which hides HTML outputs such as pandas tables. To show them,
+add this to your hugo config:
+
+.. code-block:: toml
+
+    [markup.goldmark.renderer]
+      unsafe = true
+
+``hugo_jupyter --init`` copies ``fabfile.py`` into your project, so re-run it after upgrading hugo_jupyter to pick
+up fixes.
+
 .. image:: http://i.imgur.com/ynQs0gB.png
 
 .. image:: http://i.imgur.com/Jcjwc0y.png
