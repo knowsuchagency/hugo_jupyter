@@ -5,6 +5,7 @@ import sys
 import shlex
 import subprocess as sp
 import time
+import webbrowser
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
@@ -59,7 +60,9 @@ def serve(hugo_args='', init_jupyter=True):
     if init_jupyter:
         jupyter_process = sp.Popen(('jupyter', 'notebook'), cwd='notebooks')
 
-    local('open http://localhost:1313')
+    # `open` only exists on macOS; webbrowser picks the platform's default
+    # browser and honors $BROWSER
+    webbrowser.open('http://localhost:1313')
 
     try:
         print(crayons.green('Successfully initialized server(s)'),
