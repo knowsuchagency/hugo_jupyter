@@ -20,20 +20,26 @@ from pathlib import Path
 from subprocess import run
 from textwrap import dedent
 
-from pkg_resources import resource_filename
 from docopt import docopt
+
+HUGO_CONFIG_FILES = {
+    name + ext
+    for name in ('config', 'hugo')
+    for ext in ('.toml', '.yaml', '.yml', '.json')
+}
 
 
 def main(argv=None):
     args = docopt(__doc__, argv=argv, version='1.0.3')
-    assert 'config.toml' in (p.name for p in Path().iterdir()), "config.toml not found in directory. Are you sure you're in the project's root?"
+    assert any(Path(name).is_file() for name in HUGO_CONFIG_FILES), \
+        "No hugo config file (config.toml, hugo.toml, ...) found in this directory. " \
+        "Are you sure you're in the project's root?"
     if args['--init']:
         notebooks_dir = Path('./notebooks/')
         notebooks_dir.mkdir(exist_ok=True)
 
-        with open(resource_filename('hugo_jupyter', '__fabfile.py')) as fp:
-            fabfile = Path('fabfile.py')
-            fabfile.write_text(fp.read())
+        fabfile_template = Path(__file__).with_name('__fabfile.py')
+        Path('fabfile.py').write_text(fabfile_template.read_text())
 
     print(dedent("""
     Successfully initialized. From this directory, the following commands are available.

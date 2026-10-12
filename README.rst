@@ -6,13 +6,6 @@ Hugo Jupyter
 .. image:: https://img.shields.io/pypi/v/hugo_jupyter.svg
         :target: https://pypi.python.org/pypi/hugo_jupyter
 
-.. image:: https://img.shields.io/travis/knowsuchagency/hugo_jupyter.svg
-        :target: https://travis-ci.org/knowsuchagency/hugo_jupyter
-
-.. image:: https://pyup.io/repos/github/knowsuchagency/hugo_jupyter/shield.svg
-     :target: https://pyup.io/repos/github/knowsuchagency/hugo_jupyter/
-     :alt: Updates
-
 .. image:: https://img.shields.io/github/license/mashape/apistatus.svg
 
 
@@ -67,6 +60,23 @@ notebook page to see the changes in the metadata.
 There will also be a ``hugo-jupyter`` dictionary in the notebook's metadata with a ``render-to`` field
 automatically set to ``content/post/``. You can edit this field to edit where the notebook's markdown
 will be rendered to.
+
+Any other fields you add to ``front-matter`` (``author``, ``tags``, ``thumbnail``, ...) are passed through to the
+rendered post.
+
+Plots and other image outputs are written to ``static/notebooks/<slug>/`` and linked from the post as
+``/notebooks/<slug>/...``.
+
+Hugo's default markdown renderer drops raw HTML, which hides HTML outputs such as pandas tables. To show them,
+add this to your hugo config:
+
+.. code-block:: toml
+
+    [markup.goldmark.renderer]
+      unsafe = true
+
+``hugo_jupyter --init`` copies ``fabfile.py`` into your project, so re-run it after upgrading hugo_jupyter to pick
+up fixes.
 
 .. image:: http://i.imgur.com/ynQs0gB.png
 
