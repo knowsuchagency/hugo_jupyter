@@ -2,8 +2,6 @@ from functools import partial
 from functools import singledispatch
 from io import StringIO
 
-from utils import _verify_lockfile, get_packages_from_lockfile
-
 from fabric.tasks import Task
 from fabric.api import *
 
@@ -70,7 +68,6 @@ def test(capture=True):
         capture: capture stdout [default: True]
     """
     disable_capturing = ' -s' if not true(capture) else ''
-    verify_lockfile.run()
     local('py.test' + disable_capturing)
 
 
@@ -176,43 +173,6 @@ def release():
     publish_docs()
     local('python setup.py sdist upload')
     local('python setup.py bdist_wheel upload')
-
-
-@task
-def gen_requirements_txt(with_dev=True):
-    """
-    Generate a requirements.txt from Pipfile.lock
-
-    This is more for the benefit of third-party packages
-    like pyup.io that need requirements.txt
-    """
-    from pathlib import Path
-
-    verify_lockfile.run()
-
-    packages = get_packages_from_lockfile()
-
-    requirements_file = Path('requirements.txt')
-
-    requirements_file.write_text('\n'.join(packages.default + (packages.development if true(with_dev) else [])))
-    print_green('successfully generated requirements.txt')
-
-
-class VerifyLockfile(Task):
-    name = 'verify_lockfile'
-
-    def set_docstring(func):
-        func.__doc__ = _verify_lockfile.__doc__
-        return func
-
-    @set_docstring
-    def run(self):
-        _verify_lockfile()
-        print_green('lockfile verified')
-
-
-verify_lockfile = VerifyLockfile()
-verify_lockfile.__doc__ = _verify_lockfile.__doc__
 
 
 @singledispatch
